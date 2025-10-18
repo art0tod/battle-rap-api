@@ -1,0 +1,19 @@
+meta {
+  name: Submit a draft for moderation
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/submissions/:id/submit
+  body: none
+  auth: bearer
+}
+
+params:path {
+  id: 
+}
+
+auth:bearer {
+  token: {{token}}
+}

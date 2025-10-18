@@ -1,0 +1,19 @@
+meta {
+  name: Approve application
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/mod/applications/:id/approve
+  body: none
+  auth: bearer
+}
+
+params:path {
+  id: 
+}
+
+auth:bearer {
+  token: {{token}}
+}

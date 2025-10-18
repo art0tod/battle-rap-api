@@ -4,7 +4,7 @@ import cors from '@fastify/cors';
 import fastifyCookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import { env } from '../config/env.js';
-import { logger } from '../lib/logger.js';
+import { logger, loggerOptions } from '../lib/logger.js';
 import authPlugin from '../auth/guard.js';
 import { AppError, formatProblemJson, handleZodError, mapDbError } from '../lib/errors.js';
 import publicRoutes from '../routes/public.js';
@@ -26,21 +26,34 @@ const relaxPluginVersion = <T>(plugin: T): T => {
 
 export const buildApp = () => {
   const app = Fastify({
-    logger: logger as any,
+    logger: { ...loggerOptions } as any,
     trustProxy: true,
     disableRequestLogging: true,
   });
 
-  app.register(relaxPluginVersion(helmet), { contentSecurityPolicy: false });
-  app.register(relaxPluginVersion(cors), {
-    origin: true,
-    credentials: true,
+  app.addHook('onRoute', (routeOptions) => {
+    routeOptions.config = routeOptions.config ?? {};
   });
-  app.register(relaxPluginVersion(fastifyCookie));
-  app.register(relaxPluginVersion(rateLimit), {
-    max: 100,
-    timeWindow: '1 minute',
+
+  app.addHook('onRequest', (request, _reply, done) => {
+    const ctx = (request as any).context ?? { config: {} };
+    ctx.config = ctx.config ?? request.routeOptions?.config ?? {};
+    (request as any).context = ctx;
+    done();
   });
+
+  if (env.NODE_ENV !== 'test') {
+    app.register(relaxPluginVersion(helmet), { contentSecurityPolicy: false });
+    app.register(relaxPluginVersion(cors), {
+      origin: true,
+      credentials: true,
+    });
+    app.register(relaxPluginVersion(fastifyCookie));
+    app.register(relaxPluginVersion(rateLimit), {
+      max: 100,
+      timeWindow: '1 minute',
+    });
+  }
   app.register(authPlugin);
 
   app.setErrorHandler((error, request, reply) => {
@@ -55,6 +68,9 @@ export const buildApp = () => {
       return;
     }
 
+    // eslint-disable-next-line no-console
+    console.error('unhandled', error);
+    request.log.error({ err: error }, 'Unhandled error');
     const mapped = mapDbError(error);
     reply.status(mapped.status).send(formatProblemJson(mapped));
   });

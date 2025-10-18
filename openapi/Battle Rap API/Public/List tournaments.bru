@@ -1,0 +1,17 @@
+meta {
+  name: List tournaments
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tournaments
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~status: 
+  ~page: 
+  ~limit: 
+}

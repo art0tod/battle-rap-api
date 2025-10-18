@@ -1,0 +1,15 @@
+meta {
+  name: Get tournament leaderboard
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/leaderboards
+  body: none
+  auth: inherit
+}
+
+params:query {
+  tournament: 
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Update submission draft
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/submissions/:id
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "audio_id": "",
+    "lyrics": ""
+  }
+}

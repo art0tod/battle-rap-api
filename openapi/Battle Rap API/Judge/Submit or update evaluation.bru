@@ -1,0 +1,28 @@
+meta {
+  name: Submit or update evaluation
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/judge/battles/:id/scores
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "rubric": {},
+    "score": "",
+    "pass": false,
+    "comment": ""
+  }
+}

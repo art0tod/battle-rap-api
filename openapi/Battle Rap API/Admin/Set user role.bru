@@ -1,0 +1,26 @@
+meta {
+  name: Set user role
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/roles/:userId
+  body: json
+  auth: bearer
+}
+
+params:path {
+  userId: 
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "op": "",
+    "role": ""
+  }
+}

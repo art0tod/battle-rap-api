@@ -1,7 +1,7 @@
-import pino from 'pino';
+import pino, { LoggerOptions } from 'pino';
 import { env } from '../config/env.js';
 
-export const logger = pino({
+export const loggerOptions: LoggerOptions = {
   level: env.NODE_ENV === 'production' ? 'info' : 'debug',
   transport:
     env.NODE_ENV === 'production'
@@ -13,4 +13,6 @@ export const logger = pino({
             ignore: 'pid,hostname',
           },
         },
-});
+};
+
+export const logger = pino(loggerOptions);

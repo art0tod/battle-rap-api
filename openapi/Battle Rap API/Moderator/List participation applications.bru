@@ -1,0 +1,20 @@
+meta {
+  name: List participation applications
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mod/applications
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: 
+  ~limit: 
+}
+
+auth:bearer {
+  token: {{token}}
+}

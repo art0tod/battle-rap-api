@@ -1,0 +1,15 @@
+meta {
+  name: List published match tracks
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/battles/:id/tracks
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}

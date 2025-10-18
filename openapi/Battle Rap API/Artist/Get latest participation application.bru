@@ -1,0 +1,15 @@
+meta {
+  name: Get latest participation application
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/applications/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

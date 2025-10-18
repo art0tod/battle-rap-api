@@ -1,0 +1,20 @@
+meta {
+  name: List profile change requests
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mod/profile-changes
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: 
+  ~limit: 
+}
+
+auth:bearer {
+  token: {{token}}
+}

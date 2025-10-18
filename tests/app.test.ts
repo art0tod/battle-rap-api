@@ -22,6 +22,11 @@ describe('App bootstrap', () => {
     const app = buildApp();
     await app.ready();
     const response = await app.inject({ method: 'GET', url: '/health' });
+    // debug output for failing status
+    if (response.statusCode !== 200) {
+      // eslint-disable-next-line no-console
+      console.error('health response', response.statusCode, response.payload);
+    }
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ok' });
     await app.close();

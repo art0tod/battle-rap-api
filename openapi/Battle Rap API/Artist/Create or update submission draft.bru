@@ -1,0 +1,26 @@
+meta {
+  name: Create or update submission draft
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rounds/:id/submissions
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "audio_id": "",
+    "lyrics": ""
+  }
+}

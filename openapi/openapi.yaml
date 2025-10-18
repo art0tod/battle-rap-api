@@ -1,0 +1,1642 @@
+openapi: 3.0.3
+info:
+  title: Battle Rap API
+  version: 1.0.0
+  description: >
+    REST API for managing online rap battles, tournaments, submissions, judging,
+    and administration workflows.
+servers:
+  - url: https://api.example.com
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Public
+    description: Publicly accessible read endpoints
+  - name: Auth
+    description: Authentication and session management
+  - name: Media
+    description: Media upload lifecycle
+  - name: Artist
+    description: Artist self-service endpoints
+  - name: Moderator
+    description: Moderator tooling
+  - name: Admin
+    description: Administration endpoints
+  - name: Judge
+    description: Judge workflow
+  - name: Utility
+    description: Miscellaneous health endpoints
+paths:
+  /health:
+    get:
+      tags: [Utility]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: The service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/v1/tournaments:
+    get:
+      tags: [Public]
+      summary: List tournaments
+      operationId: listTournaments
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by tournament status.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number (1-indexed).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size.
+      responses:
+        '200':
+          description: Paginated tournament list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/tournaments/{id}:
+    get:
+      tags: [Public]
+      summary: Get tournament with rounds
+      operationId: getTournament
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tournament details.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tournament:
+                    $ref: '#/components/schemas/Tournament'
+                  rounds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Round'
+                required:
+                  - tournament
+                  - rounds
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/rounds/{id}:
+    get:
+      tags: [Public]
+      summary: Get round with matches
+      operationId: getRound
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Round with associated matches.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  round:
+                    $ref: '#/components/schemas/Round'
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MatchSummary'
+                required:
+                  - round
+                  - matches
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/rounds/{id}/battles:
+    get:
+      tags: [Public]
+      summary: List matches in a round with conditional winners
+      operationId: listRoundBattles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Round and matches.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  round:
+                    $ref: '#/components/schemas/Round'
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MatchWithMaskedWinner'
+                required:
+                  - round
+                  - matches
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/battles/{id}:
+    get:
+      tags: [Public]
+      summary: Get battle summary
+      operationId: getBattle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Battle details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Battle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/battles/{id}/tracks:
+    get:
+      tags: [Public]
+      summary: List published match tracks
+      operationId: listBattleTracks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tracks for the battle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleTracksResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/leaderboards:
+    get:
+      tags: [Public]
+      summary: Get tournament leaderboard
+      operationId: getLeaderboard
+      parameters:
+        - in: query
+          name: tournament
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Tournament identifier.
+      responses:
+        '200':
+          description: Leaderboard entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Registration succeeded.
+          headers:
+            Set-Cookie:
+              description: Refresh token cookie (`refresh_token`).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthWithUserResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login succeeded.
+          headers:
+            Set-Cookie:
+              description: Refresh token cookie (`refresh_token`).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthWithUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      operationId: refreshToken
+      security:
+        - RefreshCookie: []
+      responses:
+        '200':
+          description: Access token refreshed.
+          headers:
+            Set-Cookie:
+              description: Refreshed `refresh_token` cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and revoke refresh token
+      operationId: logout
+      security:
+        - RefreshCookie: []
+      responses:
+        '204':
+          description: Logged out successfully.
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/media/presign:
+    post:
+      tags: [Media]
+      summary: Request a presigned upload URL
+      operationId: createPresignedUpload
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignRequest'
+      responses:
+        '200':
+          description: Presigned URL details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/media/complete:
+    post:
+      tags: [Media]
+      summary: Mark upload as completed
+      operationId: completeUpload
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteUploadRequest'
+      responses:
+        '200':
+          description: Media asset recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/applications/me:
+    get:
+      tags: [Artist]
+      summary: Get latest participation application
+      operationId: getMyApplication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Latest application or null.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipationApplication'
+                nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/applications:
+    post:
+      tags: [Artist]
+      summary: Submit participation application
+      operationId: submitApplication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+      responses:
+        '200':
+          description: Application submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/profile/changes:
+    post:
+      tags: [Artist]
+      summary: Request profile changes
+      operationId: requestProfileChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileChangePayload'
+      responses:
+        '200':
+          description: Profile change request created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileChangeStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/rounds/{id}/submissions:
+    post:
+      tags: [Artist]
+      summary: Create or update submission draft
+      operationId: upsertSubmission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionUpsertRequest'
+      responses:
+        '200':
+          description: Submission draft upserted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/submissions/{id}:
+    patch:
+      tags: [Artist]
+      summary: Update submission draft
+      operationId: updateSubmission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionPatchRequest'
+      responses:
+        '200':
+          description: Submission updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/submissions/{id}/submit:
+    post:
+      tags: [Artist]
+      summary: Submit a draft for moderation
+      operationId: submitSubmission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Submission forwarded for moderation.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/applications:
+    get:
+      tags: [Moderator]
+      summary: List participation applications
+      operationId: listApplications
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Applications pending review.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationListItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/applications/{id}/approve:
+    post:
+      tags: [Moderator]
+      summary: Approve application
+      operationId: approveApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Application approved.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/applications/{id}/reject:
+    post:
+      tags: [Moderator]
+      summary: Reject application
+      operationId: rejectApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+              required:
+                - reason
+      responses:
+        '204':
+          description: Application rejected.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/profile-changes:
+    get:
+      tags: [Moderator]
+      summary: List profile change requests
+      operationId: listProfileChanges
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Profile change requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileChangeListItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/profile-changes/{id}/approve:
+    post:
+      tags: [Moderator]
+      summary: Approve profile change request
+      operationId: approveProfileChange
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Profile change approved.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/profile-changes/{id}/reject:
+    post:
+      tags: [Moderator]
+      summary: Reject profile change request
+      operationId: rejectProfileChange
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+              required:
+                - reason
+      responses:
+        '204':
+          description: Profile change rejected.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/submissions/{id}/publish:
+    post:
+      tags: [Moderator]
+      summary: Publish submission
+      operationId: publishSubmission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Submission published.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/admin/roles/{userId}:
+    post:
+      tags: [Admin]
+      summary: Set user role
+      operationId: setUserRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+      responses:
+        '200':
+          description: Updated user roles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRolesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/admin/finalize/battles/{id}:
+    post:
+      tags: [Admin]
+      summary: Finalize battle and refresh views
+      operationId: finalizeBattle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Battle finalized.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/judge/assignments:
+    get:
+      tags: [Judge]
+      summary: List judge assignments
+      operationId: listJudgeAssignments
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Assignments for the judge.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JudgeAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/judge/battles/{id}/scores:
+    post:
+      tags: [Judge]
+      summary: Submit or update evaluation
+      operationId: upsertEvaluation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        '201':
+          description: Evaluation saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Access token issued by the API. Required for authenticated endpoints.
+    RefreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: >
+        Refresh token cookie issued during login/registration.
+  responses:
+    ErrorResponse:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication required or token invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Insufficient permissions.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Resource conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ValidationError:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        detail:
+          type: string
+        status:
+          type: integer
+        field_errors:
+          type: object
+          additionalProperties:
+            type: string
+      example:
+        type: https://httpstatuses.com/422
+        title: Payload validation failed.
+        detail: Payload validation failed.
+        status: 422
+        field_errors:
+          email: Invalid email.
+    Tournament:
+      type: object
+      required:
+        - id
+        - title
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          description: Tournament lifecycle status.
+        registration_open_at:
+          type: string
+          format: date-time
+          nullable: true
+        submission_deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        judging_deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        public_at:
+          type: string
+          format: date-time
+          nullable: true
+    TournamentListResponse:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tournament'
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    Round:
+      type: object
+      required:
+        - id
+        - tournament_id
+        - kind
+        - number
+        - scoring
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        tournament_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: Round type (e.g. qualification, duel).
+        number:
+          type: integer
+        scoring:
+          type: string
+          enum: [pass_fail, points, rubric]
+        status:
+          type: string
+          description: Current round state.
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        submission_deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        judging_deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        strategy:
+          type: string
+          nullable: true
+    MatchSummary:
+      type: object
+      required:
+        - id
+        - round_id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        round_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        winner_match_track_id:
+          type: string
+          format: uuid
+          nullable: true
+    MatchWithMaskedWinner:
+      allOf:
+        - $ref: '#/components/schemas/MatchSummary'
+    Battle:
+      type: object
+      required:
+        - id
+        - round_id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        round_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        winner_match_track_id:
+          type: string
+          format: uuid
+          nullable: true
+    BattleTracksResponse:
+      type: object
+      required:
+        - match_id
+        - tracks
+      properties:
+        match_id:
+          type: string
+          format: uuid
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchTrack'
+    MatchTrack:
+      type: object
+      required:
+        - id
+        - participant_id
+        - audio_url
+        - mime
+        - submitted_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        audio_url:
+          type: string
+          format: uri
+        mime:
+          type: string
+        duration_sec:
+          type: number
+          format: float
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+        avg_total:
+          type: number
+          format: float
+          nullable: true
+    LeaderboardResponse:
+      type: object
+      required:
+        - tournament_id
+        - entries
+      properties:
+        tournament_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+    LeaderboardEntry:
+      type: object
+      required:
+        - tournament_id
+        - participant_id
+        - wins
+      properties:
+        tournament_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        wins:
+          type: integer
+          minimum: 0
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - display_name
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+          minLength: 2
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    AuthUser:
+      type: object
+      required:
+        - id
+        - email
+        - display_name
+        - roles
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    AuthWithUserResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Access token TTL in seconds.
+        user:
+          $ref: '#/components/schemas/AuthUser'
+    RefreshResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+    PresignRequest:
+      type: object
+      required:
+        - filename
+        - mime
+        - size_bytes
+        - type
+      properties:
+        filename:
+          type: string
+        mime:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 1
+        type:
+          type: string
+          enum: [audio, image]
+    PresignResponse:
+      type: object
+      required:
+        - assetId
+        - storageKey
+        - uploadUrl
+        - headers
+      properties:
+        assetId:
+          type: string
+          format: uuid
+        storageKey:
+          type: string
+        uploadUrl:
+          type: string
+          format: uri
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+    CompleteUploadRequest:
+      type: object
+      required:
+        - asset_id
+        - storage_key
+        - mime
+        - size_bytes
+        - kind
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        storage_key:
+          type: string
+        mime:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum: [audio, image]
+    MediaAssetStatus:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Current media asset status.
+    ApplicationRequest:
+      type: object
+      properties:
+        round_id:
+          type: string
+          format: uuid
+        city:
+          type: string
+        age:
+          type: integer
+          minimum: 12
+          maximum: 120
+        vk_id:
+          type: string
+        full_name:
+          type: string
+        beat_author:
+          type: string
+        audio_id:
+          type: string
+          format: uuid
+        lyrics:
+          type: string
+    ApplicationStatusResponse:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Application status.
+    ParticipationApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        round_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        city:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        vk_id:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+          nullable: true
+        beat_author:
+          type: string
+          nullable: true
+        audio_id:
+          type: string
+          format: uuid
+          nullable: true
+        lyrics:
+          type: string
+          nullable: true
+        moderator_id:
+          type: string
+          format: uuid
+          nullable: true
+        reject_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+    ApplicationListItem:
+      type: object
+      required:
+        - id
+        - user_id
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        round_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        city:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        vk_id:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+          nullable: true
+        audio_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ProfileChangePayload:
+      type: object
+      additionalProperties: false
+      properties:
+        bio:
+          type: string
+          maxLength: 2000
+        city:
+          type: string
+        full_name:
+          type: string
+        vk_id:
+          type: string
+        avatar_key:
+          type: string
+        age:
+          type: integer
+          minimum: 12
+          maximum: 120
+        socials:
+          type: object
+          additionalProperties: true
+        display_name:
+          type: string
+    ProfileChangeStatus:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+    ProfileChangeListItem:
+      type: object
+      required:
+        - id
+        - user_id
+        - changes
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        changes:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    SubmissionUpsertRequest:
+      type: object
+      required:
+        - audio_id
+      properties:
+        audio_id:
+          type: string
+          format: uuid
+        lyrics:
+          type: string
+          nullable: true
+    SubmissionPatchRequest:
+      type: object
+      properties:
+        audio_id:
+          type: string
+          format: uuid
+        lyrics:
+          type: string
+          nullable: true
+    SubmissionStatus:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Submission status.
+    RoleChangeRequest:
+      type: object
+      required:
+        - op
+        - role
+      properties:
+        op:
+          type: string
+          enum: [grant, revoke]
+        role:
+          type: string
+          enum: [artist, judge, listener, moderator, admin]
+    UserRolesResponse:
+      type: object
+      required:
+        - user_id
+        - roles
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+    JudgeAssignment:
+      type: object
+      required:
+        - id
+        - match_id
+        - status
+        - round_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        match_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        assigned_at:
+          type: string
+          format: date-time
+          nullable: true
+        round_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        match_status:
+          type: string
+    EvaluationRequest:
+      type: object
+      properties:
+        rubric:
+          type: object
+          additionalProperties:
+            type: number
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        pass:
+          type: boolean
+        comment:
+          type: string
+          maxLength: 2000
+      description: At least one of `rubric`, `score`, or `pass` must be provided.
+    EvaluationResponse:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          example: true
