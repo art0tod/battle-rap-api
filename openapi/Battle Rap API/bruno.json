@@ -1,9 +1,0 @@
-{
-  "version": "1",
-  "name": "Battle Rap API",
-  "type": "collection",
-  "ignore": [
-    "node_modules",
-    ".git"
-  ]
-}

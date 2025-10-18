@@ -13,6 +13,7 @@ import {
 } from '../services/tournaments.js';
 import { resolveCdnUrl } from '../services/media.js';
 import { AppError } from '../lib/errors.js';
+import { listPublicParticipants } from '../services/participants.js';
 
 const publicRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/tournaments', async (request) => {
@@ -130,6 +131,23 @@ const publicRoutes: FastifyPluginAsync = async (fastify) => {
       tournament_id: query.tournament,
       entries,
     };
+  });
+
+  fastify.get('/artists', async (request) => {
+    const querySchema = z.object({
+      page: z.coerce.number().int().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+      search: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .transform((val) => (val && val.length ? val : undefined)),
+      role: z.enum(['artist', 'judge']).optional(),
+      sort: z.enum(['joined_at', 'wins', 'rating']).optional(),
+    });
+    const query = querySchema.parse(request.query);
+    return listPublicParticipants(query);
   });
 };
 

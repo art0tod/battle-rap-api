@@ -15,12 +15,17 @@ const ensureTestEnv = () => {
   process.env.NODE_ENV ??= 'test';
 };
 
+const buildTestApp = async () => {
+  ensureTestEnv();
+  const { buildApp } = await import('../src/http/app.js');
+  const app = buildApp();
+  await app.ready();
+  return app;
+};
+
 describe('App bootstrap', () => {
   it('responds to health check', async () => {
-    ensureTestEnv();
-    const { buildApp } = await import('../src/http/app.js');
-    const app = buildApp();
-    await app.ready();
+    const app = await buildTestApp();
     const response = await app.inject({ method: 'GET', url: '/health' });
     // debug output for failing status
     if (response.statusCode !== 200) {
@@ -29,6 +34,58 @@ describe('App bootstrap', () => {
     }
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ok' });
+    await app.close();
+  });
+});
+
+describe('Profile routes', () => {
+  it('requires auth for /profile/me', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/profile/me' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('validates profile id parameter', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/profile/not-a-uuid' });
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+});
+
+describe('Auth routes', () => {
+  it('requires auth for /auth/me', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/auth/me' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('Public participants', () => {
+  it('rejects invalid sort option', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/artists?sort=oldest' });
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+});
+
+describe('Moderator routes', () => {
+  it('requires auth for submissions queue', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/mod/submissions' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('Admin routes', () => {
+  it('requires auth for user listing', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/admin/users' });
+    expect(response.statusCode).toBe(401);
     await app.close();
   });
 });

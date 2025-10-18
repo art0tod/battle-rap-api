@@ -19,6 +19,8 @@ tags:
     description: Media upload lifecycle
   - name: Artist
     description: Artist self-service endpoints
+  - name: Profile
+    description: Profile retrieval for public and authenticated users
   - name: Moderator
     description: Moderator tooling
   - name: Admin
@@ -75,6 +77,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TournamentListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/artists:
+    get:
+      tags: [Public]
+      summary: List public participants
+      operationId: listPublicParticipants
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number (1-indexed).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size.
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Case-insensitive search across display name and full name.
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [artist, judge]
+          description: Restrict listing to participants with the specified public role.
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [joined_at, wins, rating]
+          description: |
+            Sorting key: `joined_at` (newest first), `wins` (descending total wins), `rating` (highest average score first).
+      responses:
+        '200':
+          description: Paginated public participant list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicParticipantsResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         default:
           $ref: '#/components/responses/ErrorResponse'
   /api/v1/tournaments/{id}:
@@ -335,6 +385,24 @@ paths:
           description: Logged out successfully.
         default:
           $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get authenticated user profile snapshot
+      operationId: getAuthMe
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/media/presign:
     post:
       tags: [Media]
@@ -381,6 +449,50 @@ paths:
                 $ref: '#/components/schemas/MediaAssetStatus'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/profile/me:
+    get:
+      tags: [Profile]
+      summary: Get current user profile
+      operationId: getOwnProfile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Authenticated user profile view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/profile/{id}:
+    get:
+      tags: [Profile]
+      summary: Get public profile by user ID
+      operationId: getProfileById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User identifier.
+      responses:
+        '200':
+          description: Profile view adapted to caller visibility.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         default:
           $ref: '#/components/responses/ErrorResponse'
   /api/v1/applications/me:
@@ -578,6 +690,35 @@ paths:
           $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/applications/{id}:
+    get:
+      tags: [Moderator]
+      summary: Get application details
+      operationId: getApplicationDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Application with applicant context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationApplicationDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/mod/applications/{id}/approve:
     post:
       tags: [Moderator]
@@ -675,6 +816,35 @@ paths:
           $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/profile-changes/{id}:
+    get:
+      tags: [Moderator]
+      summary: Get profile change request
+      operationId: getProfileChangeDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Profile change request details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationProfileChangeDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/mod/profile-changes/{id}/approve:
     post:
       tags: [Moderator]
@@ -737,6 +907,83 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/submissions:
+    get:
+      tags: [Moderator]
+      summary: List submissions pending moderation
+      operationId: listSubmissionsForModeration
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [submitted, approved]
+        - in: query
+          name: round_id
+          schema:
+            type: string
+            format: uuid
+            nullable: true
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: Search by display name or full name.
+      responses:
+        '200':
+          description: Submissions awaiting moderation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationSubmissionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/mod/submissions/{id}:
+    get:
+      tags: [Moderator]
+      summary: Get submission moderation detail
+      operationId: getSubmissionForModeration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Submission details for moderation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationSubmission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/ErrorResponse'
   /api/v1/mod/submissions/{id}/publish:
@@ -828,6 +1075,132 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users with roles
+      operationId: listUsersForAdmin
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: Case-insensitive match against display name, email, or full name.
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [admin, moderator, artist, judge, listener]
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [created_at, -created_at, display_name, -display_name]
+      responses:
+        '200':
+          description: Paginated user list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/admin/users/{id}:
+    get:
+      tags: [Admin]
+      summary: Get user profile as admin
+      operationId: getUserProfileAdmin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full user profile with private fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/admin/audit-log:
+    get:
+      tags: [Admin]
+      summary: List audit log entries
+      operationId: listAuditLog
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: actor_id
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: target_table
+          schema:
+            type: string
+        - in: query
+          name: target_id
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Audit log entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/ErrorResponse'
   /api/v1/judge/assignments:
@@ -1258,6 +1631,457 @@ components:
           description: Access token TTL in seconds.
         user:
           $ref: '#/components/schemas/AuthUser'
+    ProfileAvatar:
+      type: object
+      required:
+        - key
+        - url
+      properties:
+        key:
+          type: string
+          description: Internal storage key for the avatar asset.
+        url:
+          type: string
+          format: uri
+          description: CDN URL for the avatar asset.
+    ProfileViewerContext:
+      type: object
+      required:
+        - is_self
+        - can_edit
+        - can_moderate
+        - can_view_private
+      properties:
+        is_self:
+          type: boolean
+          description: Indicates the profile belongs to the caller.
+        can_edit:
+          type: boolean
+          description: Caller may submit profile change requests.
+        can_moderate:
+          type: boolean
+          description: Caller has moderator or admin privileges over this profile.
+        can_view_private:
+          type: boolean
+          description: Caller may see private fields such as email or full name.
+    ProfileView:
+      type: object
+      required:
+        - id
+        - display_name
+        - roles
+        - created_at
+        - updated_at
+        - viewer_context
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        avatar:
+          $ref: '#/components/schemas/ProfileAvatar'
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        viewer_context:
+          $ref: '#/components/schemas/ProfileViewerContext'
+        email:
+          type: string
+          format: email
+          description: Present when the caller can view private information.
+        age:
+          type: integer
+          minimum: 12
+          maximum: 120
+          nullable: true
+        vk_id:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+          nullable: true
+        socials:
+          type: object
+          additionalProperties: true
+          description: Social handles map, available to privileged viewers.
+    PublicParticipant:
+      type: object
+      required:
+        - id
+        - display_name
+        - roles
+        - joined_at
+        - total_wins
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        city:
+          type: string
+          nullable: true
+        joined_at:
+          type: string
+          format: date-time
+        avatar:
+          $ref: '#/components/schemas/ProfileAvatar'
+          nullable: true
+        avg_total_score:
+          type: number
+          format: float
+          nullable: true
+          description: Average judge score across published tracks (0-100).
+        total_wins:
+          type: integer
+          minimum: 0
+          description: Total number of recorded match wins.
+    PublicParticipantsResponse:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicParticipant'
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    ModerationApplicationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        round_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        city:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        vk_id:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+          nullable: true
+        beat_author:
+          type: string
+          nullable: true
+        audio_id:
+          type: string
+          format: uuid
+          nullable: true
+        lyrics:
+          type: string
+          nullable: true
+        profile_city:
+          type: string
+          nullable: true
+        profile_full_name:
+          type: string
+          nullable: true
+        moderator_id:
+          type: string
+          format: uuid
+          nullable: true
+        reject_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+    ModerationProfileChangeDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        changes:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        moderator_id:
+          type: string
+          format: uuid
+          nullable: true
+        reject_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+    ModerationSubmission:
+      type: object
+      required:
+        - id
+        - status
+        - round
+        - artist
+        - audio
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        lyrics:
+          type: string
+          nullable: true
+        round:
+          type: object
+          required:
+            - id
+            - number
+            - kind
+            - tournament_id
+            - tournament_title
+          properties:
+            id:
+              type: string
+              format: uuid
+            number:
+              type: integer
+            kind:
+              type: string
+            tournament_id:
+              type: string
+              format: uuid
+            tournament_title:
+              type: string
+        artist:
+          type: object
+          required:
+            - id
+            - display_name
+            - email
+          properties:
+            id:
+              type: string
+              format: uuid
+            display_name:
+              type: string
+            email:
+              type: string
+              format: email
+        audio:
+          type: object
+          required:
+            - id
+            - mime
+            - status
+          properties:
+            id:
+              type: string
+              format: uuid
+            mime:
+              type: string
+            status:
+              type: string
+            url:
+              type: string
+              format: uri
+              nullable: true
+    ModerationSubmissionListResponse:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationSubmission'
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    AdminUser:
+      type: object
+      required:
+        - id
+        - email
+        - display_name
+        - roles
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+    AdminUserListResponse:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - action
+        - target_table
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_display_name:
+          type: string
+          nullable: true
+        action:
+          type: string
+        target_table:
+          type: string
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    AuditLogResponse:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
     RefreshResponse:
       type: object
       required:

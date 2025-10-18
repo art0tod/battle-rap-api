@@ -15,6 +15,7 @@ import adminRoutes from '../routes/admin.js';
 import judgeRoutes from '../routes/judge.js';
 import mediaRoutes from '../routes/media.js';
 import { ZodError } from 'zod';
+import profileRoutes from '../routes/profile.js';
 
 const relaxPluginVersion = <T>(plugin: T): T => {
   const meta = (plugin as unknown as Record<symbol, any>)[Symbol.for('plugin-meta')];
@@ -79,6 +80,7 @@ export const buildApp = () => {
   app.register(authRoutes, { prefix: '/api/v1/auth' });
   app.register(mediaRoutes, { prefix: '/api/v1/media' });
   app.register(artistRoutes, { prefix: '/api/v1' });
+  app.register(profileRoutes, { prefix: '/api/v1' });
   app.register(moderatorRoutes, { prefix: '/api/v1/mod' });
   app.register(adminRoutes, { prefix: '/api/v1/admin' });
   app.register(judgeRoutes, { prefix: '/api/v1/judge' });

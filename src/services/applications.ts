@@ -94,3 +94,16 @@ export const moderatorUpdateApplicationStatus = async (params: {
     throw mapDbError(err);
   }
 };
+
+export const getApplicationById = async (applicationId: string) => {
+  const { rows } = await pool.query(
+    `SELECT pa.*, u.display_name, u.email,
+            ap.city AS profile_city, ap.full_name AS profile_full_name
+     FROM participation_application pa
+     JOIN app_user u ON u.id = pa.user_id
+     LEFT JOIN artist_profile ap ON ap.user_id = pa.user_id
+     WHERE pa.id = $1`,
+    [applicationId]
+  );
+  return rows[0] ?? null;
+};

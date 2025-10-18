@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken, verifyToken } from '../auth/jwt.js';
 import { parseDurationSeconds } from '../lib/time.js';
 import { env } from '../config/env.js';
 import { storeRefreshToken, revokeRefreshToken, verifyRefreshToken } from '../services/tokens.js';
+import { getOwnProfile } from '../services/profile.js';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   const refreshMaxAge = parseDurationSeconds(env.JWT_REFRESH_TTL);
@@ -139,6 +140,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
     reply.clearCookie('refresh_token', { path: '/api/v1/auth' });
     reply.status(204).send();
+  });
+
+  fastify.get('/me', { preHandler: fastify.requireAuth }, async (request) => {
+    const user = request.authUser!;
+    return getOwnProfile(user.id, user.roles);
   });
 };
 

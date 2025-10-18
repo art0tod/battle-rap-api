@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { pool, tx } from '../db/pool.js';
 import { AppError, mapDbError } from '../lib/errors.js';
+import { normalizePagination, buildPaginationClause } from '../lib/pagination.js';
 
 export type UserRecord = {
   id: string;
@@ -67,4 +68,110 @@ export const grantDefaultListenerRole = async (userId: string) => {
       [userId]
     );
   });
+};
+
+type AdminUserRow = {
+  id: string;
+  email: string;
+  display_name: string;
+  created_at: string;
+  updated_at: string;
+  roles: unknown;
+  last_login_at: string | null;
+};
+
+const parseRoles = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+export const listUsersForAdmin = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: string;
+  sort?: 'created_at' | '-created_at' | 'display_name' | '-display_name';
+}) => {
+  const pagination = normalizePagination(params.page, params.limit);
+  const { limit, offset } = buildPaginationClause(pagination);
+
+  const sort = params.sort ?? '-created_at';
+  const sortClause =
+    sort === 'display_name' ? 'ORDER BY u.display_name ASC' :
+    sort === '-display_name' ? 'ORDER BY u.display_name DESC' :
+    sort === 'created_at' ? 'ORDER BY u.created_at ASC' :
+    'ORDER BY u.created_at DESC';
+
+  const filters: string[] = [];
+  const values: unknown[] = [];
+
+  if (params.search) {
+    const token = `%${params.search.trim().replace(/\s+/g, '%')}%`;
+    values.push(token);
+    filters.push(`(u.display_name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR ap.full_name ILIKE $${values.length})`);
+  }
+
+  if (params.role) {
+    values.push(params.role);
+    filters.push(`EXISTS (SELECT 1 FROM app_user_role aur WHERE aur.user_id = u.id AND aur.role = $${values.length})`);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+  const baseQuery = `
+    SELECT
+      u.id,
+      u.email,
+      u.display_name,
+      u.created_at,
+      u.updated_at,
+      COALESCE(json_agg(DISTINCT aur.role) FILTER (WHERE aur.role IS NOT NULL), '[]'::json) AS roles,
+      NULL::TIMESTAMPTZ AS last_login_at
+    FROM app_user u
+    LEFT JOIN app_user_role aur ON aur.user_id = u.id
+    LEFT JOIN artist_profile ap ON ap.user_id = u.id
+    ${where}
+    GROUP BY u.id
+    ${sortClause}
+    LIMIT $${values.length + 1}
+    OFFSET $${values.length + 2}
+  `;
+
+  const countQuery = `
+    SELECT COUNT(DISTINCT u.id)::int AS total
+    FROM app_user u
+    LEFT JOIN artist_profile ap ON ap.user_id = u.id
+    ${where}
+  `;
+
+  const [data, count] = await Promise.all([
+    pool.query<AdminUserRow>(baseQuery, [...values, limit, offset]),
+    pool.query<{ total: number }>(countQuery, values),
+  ]);
+
+  return {
+    data: data.rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      display_name: row.display_name,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      roles: parseRoles(row.roles),
+      last_login_at: row.last_login_at,
+    })),
+    page: pagination.page,
+    limit: pagination.limit,
+    total: count.rows[0]?.total ?? 0,
+  };
 };
