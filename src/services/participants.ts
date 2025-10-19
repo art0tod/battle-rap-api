@@ -1,5 +1,6 @@
 import { pool } from '../db/pool.js';
 import { normalizePagination, buildPaginationClause } from '../lib/pagination.js';
+import { normalizeUserRoles, roleOrderSqlLiteral } from '../lib/roles.js';
 import { resolveCdnUrl } from './media.js';
 
 export type PublicParticipantSort = 'joined_at' | 'wins' | 'rating';
@@ -17,6 +18,7 @@ type PublicParticipantRow = {
   display_name: string;
   created_at: string;
   city: string | null;
+  full_name: string | null;
   avatar_key: string | null;
   roles: unknown;
   avg_total_score: string | null;
@@ -26,11 +28,15 @@ type PublicParticipantRow = {
 const normalizeRoles = (value: unknown): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
+    return normalizeUserRoles(value);
   }
   try {
     if (typeof value === 'string') {
-      return JSON.parse(value);
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? normalizeUserRoles(parsed) : [];
+    }
+    if (typeof value === 'object' && value !== null && Symbol.iterator in (value as Record<string, unknown>)) {
+      return normalizeUserRoles(value as Iterable<unknown>);
     }
   } catch {
     // ignore malformed json
@@ -60,14 +66,13 @@ export const listPublicParticipants = async (params: PublicParticipantQuery) => 
     filters.push(`(u.display_name ILIKE ${placeholder} OR COALESCE(ap.full_name, '') ILIKE ${placeholder})`);
   }
 
-  const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-
-  const havingClauses: string[] = [];
   if (params.role) {
     values.push(params.role);
-    havingClauses.push(`BOOL_OR(aur.role = $${values.length})`);
+    filters.push(`EXISTS (SELECT 1 FROM app_user_role aur WHERE aur.user_id = u.id AND aur.role = $${values.length})`);
   }
-  const havingClause = havingClauses.length ? `HAVING ${havingClauses.join(' AND ')}` : '';
+
+  filters.push(`EXISTS (SELECT 1 FROM app_user_role aur WHERE aur.user_id = u.id AND aur.role IN ('artist','judge'))`);
+  const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
   const baseCte = `
     WITH base AS (
@@ -76,14 +81,22 @@ export const listPublicParticipants = async (params: PublicParticipantQuery) => 
         u.display_name,
         u.created_at,
         ap.city,
+        ap.full_name,
         ap.avatar_key,
-        COALESCE(json_agg(DISTINCT aur.role ORDER BY aur.role), '[]'::json) AS roles
+        COALESCE(
+          (
+            SELECT json_agg(role ORDER BY array_position(${roleOrderSqlLiteral}, role))
+            FROM (
+              SELECT DISTINCT aur.role AS role
+              FROM app_user_role aur
+              WHERE aur.user_id = u.id AND aur.role IN ('artist','judge')
+            ) ordered_roles
+          ),
+          '[]'::json
+        ) AS roles
       FROM app_user u
-      JOIN app_user_role aur ON aur.user_id = u.id AND aur.role IN ('artist','judge')
       LEFT JOIN artist_profile ap ON ap.user_id = u.id
       ${whereClause}
-      GROUP BY u.id, ap.city, ap.avatar_key
-      ${havingClause}
     )
   `;
 
@@ -94,6 +107,7 @@ export const listPublicParticipants = async (params: PublicParticipantQuery) => 
       b.display_name,
       b.created_at,
       b.city,
+      b.full_name,
       b.avatar_key,
       b.roles,
       stats.avg_total_score,
@@ -137,6 +151,7 @@ export const listPublicParticipants = async (params: PublicParticipantQuery) => 
     display_name: row.display_name,
     roles: normalizeRoles(row.roles),
     city: row.city,
+    full_name: row.full_name,
     joined_at: row.created_at,
     avatar: row.avatar_key ? { key: row.avatar_key, url: resolveCdnUrl(row.avatar_key) } : null,
     avg_total_score: row.avg_total_score ? Number(row.avg_total_score) : null,

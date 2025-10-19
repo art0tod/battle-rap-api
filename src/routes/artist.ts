@@ -20,7 +20,6 @@ const artistRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/applications', { preHandler: fastify.requireAuth }, async (request) => {
     const schema = z.object({
-      round_id: z.string().uuid().optional(),
       city: z.string().optional(),
       age: z.number().int().min(12).max(120).optional(),
       vk_id: z.string().optional(),
@@ -33,7 +32,6 @@ const artistRoutes: FastifyPluginAsync = async (fastify) => {
     const userId = request.authUser!.id;
     return submitApplication({
       userId,
-      roundId: body.round_id,
       city: body.city,
       age: body.age,
       vkId: body.vk_id,

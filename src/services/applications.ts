@@ -4,7 +4,6 @@ import { AppError, mapDbError } from '../lib/errors.js';
 
 export type ApplicationPayload = {
   userId: string;
-  roundId?: string;
   city?: string;
   age?: number;
   vkId?: string;
@@ -18,12 +17,11 @@ export const submitApplication = async (payload: ApplicationPayload) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO participation_application(id, user_id, round_id, status, city, age, vk_id, full_name, beat_author, audio_id, lyrics, created_at, updated_at)
-       VALUES ($1,$2,$3,'submitted',$4,$5,$6,$7,$8,$9,$10,now(),now())
+       VALUES ($1,$2,NULL,'submitted',$3,$4,$5,$6,$7,$8,$9,now(),now())
        RETURNING id, status`,
       [
         randomUUID(),
         payload.userId,
-        payload.roundId ?? null,
         payload.city ?? null,
         payload.age ?? null,
         payload.vkId ?? null,

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { pool, tx } from '../db/pool.js';
 import { AppError, mapDbError } from '../lib/errors.js';
 import { normalizePagination, buildPaginationClause } from '../lib/pagination.js';
+import { normalizeUserRoles, roleOrderSqlLiteral } from '../lib/roles.js';
 
 export type UserRecord = {
   id: string;
@@ -46,10 +47,13 @@ export const findUserByEmail = async (email: string) => {
 
 export const getUserRoles = async (userId: string) => {
   const { rows } = await pool.query<{ role: string }>(
-    `SELECT role FROM app_user_role WHERE user_id = $1`,
+    `SELECT role
+     FROM app_user_role
+     WHERE user_id = $1
+     ORDER BY array_position(${roleOrderSqlLiteral}, role)`,
     [userId]
   );
-  return rows.map((r: { role: string }) => r.role);
+  return normalizeUserRoles(rows.map((r: { role: string }) => r.role));
 };
 
 export const setUserRole = async (actorId: string, targetId: string, role: string, op: 'grant' | 'revoke') => {
@@ -83,12 +87,19 @@ type AdminUserRow = {
 const parseRoles = (value: unknown): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
+    return normalizeUserRoles(value);
   }
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+      return Array.isArray(parsed) ? normalizeUserRoles(parsed) : [];
+    } catch {
+      return [];
+    }
+  }
+  if (typeof value === 'object' && value !== null && Symbol.iterator in (value as Record<string, unknown>)) {
+    try {
+      return normalizeUserRoles(value as Iterable<unknown>);
     } catch {
       return [];
     }
@@ -136,13 +147,21 @@ export const listUsersForAdmin = async (params: {
       u.display_name,
       u.created_at,
       u.updated_at,
-      COALESCE(json_agg(DISTINCT aur.role) FILTER (WHERE aur.role IS NOT NULL), '[]'::json) AS roles,
+      COALESCE(
+        (
+          SELECT json_agg(role ORDER BY array_position(${roleOrderSqlLiteral}, role))
+          FROM (
+            SELECT DISTINCT aur.role AS role
+            FROM app_user_role aur
+            WHERE aur.user_id = u.id
+          ) ordered_roles
+        ),
+        '[]'::json
+      ) AS roles,
       NULL::TIMESTAMPTZ AS last_login_at
     FROM app_user u
-    LEFT JOIN app_user_role aur ON aur.user_id = u.id
     LEFT JOIN artist_profile ap ON ap.user_id = u.id
     ${where}
-    GROUP BY u.id
     ${sortClause}
     LIMIT $${values.length + 1}
     OFFSET $${values.length + 2}

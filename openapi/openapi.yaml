@@ -2170,9 +2170,6 @@ components:
     ApplicationRequest:
       type: object
       properties:
-        round_id:
-          type: string
-          format: uuid
         city:
           type: string
         age:

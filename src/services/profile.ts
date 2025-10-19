@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { AppError, mapDbError } from '../lib/errors.js';
+import { normalizeUserRoles, roleOrderSqlLiteral } from '../lib/roles.js';
 import { resolveCdnUrl } from './media.js';
 
 export type ProfileChangePayload = {
@@ -128,9 +129,12 @@ const fetchProfileRow = async (userId: string) => {
        ap.full_name,
        COALESCE(
          (
-           SELECT json_agg(role ORDER BY role)
-           FROM app_user_role aur
-           WHERE aur.user_id = u.id
+           SELECT json_agg(role ORDER BY array_position(${roleOrderSqlLiteral}, role))
+           FROM (
+             SELECT DISTINCT aur.role AS role
+             FROM app_user_role aur
+             WHERE aur.user_id = u.id
+           ) ordered_roles
          ),
          '[]'::json
        ) AS roles
@@ -145,18 +149,19 @@ const fetchProfileRow = async (userId: string) => {
 const normalizeRoles = (value: unknown): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.filter((role): role is string => typeof role === 'string');
+    return normalizeUserRoles(value);
   }
   if (typeof value === 'string') {
-    return value
+    const parsed = value
       .replace(/^\{|\}$/g, '')
       .split(',')
       .map((role) => role.replace(/"/g, '').trim())
       .filter(Boolean);
+    return normalizeUserRoles(parsed);
   }
-  if (typeof value === 'object' && value !== null && 'length' in value && typeof (value as any).map === 'function') {
+  if (typeof value === 'object' && value !== null && Symbol.iterator in (value as Record<string, unknown>)) {
     try {
-      return Array.from(value as unknown as Iterable<unknown>).filter((role): role is string => typeof role === 'string');
+      return normalizeUserRoles(value as Iterable<unknown>);
     } catch {
       return [];
     }
