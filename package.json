@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/http/server.js",
     "migrate": "tsx scripts/migrate.ts",
+    "seed:demo-battle": "tsx scripts/seed-demo-battle.ts",
     "test": "vitest run",
     "lint": "tsc --noEmit"
   },

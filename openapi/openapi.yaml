@@ -160,6 +160,29 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/ErrorResponse'
+  /api/v1/rounds/{id}/overview:
+    get:
+      tags: [Public]
+      summary: Round overview with scoring summaries
+      operationId: getRoundOverview
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Round overview data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOverview'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/rounds/{id}:
     get:
       tags: [Public]
@@ -1223,6 +1246,97 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/judge/assignments/random:
+    post:
+      tags: [Judge]
+      summary: Request next battle assignment
+      operationId: requestJudgeAssignment
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Newly assigned battle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudgeAssignment'
+        '204':
+          description: No available battles to assign.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/judge/assignments/{id}/status:
+    post:
+      tags: [Judge]
+      summary: Update judge assignment status
+      operationId: updateJudgeAssignmentStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [completed, skipped]
+      responses:
+        '200':
+          description: Updated assignment state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudgeAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/judge/battles/{id}:
+    get:
+      tags: [Judge]
+      summary: Get battle details for judging
+      operationId: getJudgeBattleDetails
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Battle information for judge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudgeBattleDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/ErrorResponse'
   /api/v1/judge/battles/{id}/scores:
@@ -2436,6 +2550,358 @@ components:
           nullable: true
         match_status:
           type: string
+        round_kind:
+          type: string
+        round_number:
+          type: integer
+        round_scoring:
+          type: string
+        round_status:
+          type: string
+        round_strategy:
+          type: string
+          nullable: true
+        judging_deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+    JudgingRubricCriterion:
+      type: object
+      required:
+        - key
+        - name
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        weight:
+          type: number
+          nullable: true
+        min_value:
+          type: number
+          nullable: true
+        max_value:
+          type: number
+          nullable: true
+        position:
+          type: integer
+          nullable: true
+    JudgeBattleDetails:
+      type: object
+      required:
+        - match
+        - participants
+        - rubric
+      properties:
+        match:
+          type: object
+          required:
+            - id
+            - round_id
+            - status
+            - round
+          properties:
+            id:
+              type: string
+              format: uuid
+            round_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+            starts_at:
+              type: string
+              format: date-time
+              nullable: true
+            ends_at:
+              type: string
+              format: date-time
+              nullable: true
+            winner_match_track_id:
+              type: string
+              format: uuid
+              nullable: true
+            round:
+              type: object
+              required:
+                - id
+                - kind
+                - number
+                - scoring
+                - status
+                - strategy
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                number:
+                  type: integer
+                scoring:
+                  type: string
+                  enum: [pass_fail, points, rubric]
+                status:
+                  type: string
+                strategy:
+                  type: string
+                judging_deadline_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+        participants:
+          type: array
+          items:
+            type: object
+            required:
+              - participant_id
+              - user_id
+              - display_name
+            properties:
+              participant_id:
+                type: string
+                format: uuid
+              user_id:
+                type: string
+                format: uuid
+              display_name:
+                type: string
+              seed:
+                type: integer
+                nullable: true
+              avg_total_score:
+                type: number
+                nullable: true
+              track:
+                type: object
+                nullable: true
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  audio_key:
+                    type: string
+                    nullable: true
+                  audio_url:
+                    type: string
+                    format: uri
+                    nullable: true
+                  mime:
+                    type: string
+                    nullable: true
+                  duration_sec:
+                    type: number
+                    nullable: true
+                  submitted_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  lyrics:
+                    type: string
+                    nullable: true
+        rubric:
+          type: array
+          items:
+            $ref: '#/components/schemas/JudgingRubricCriterion'
+        evaluation:
+          type: object
+          nullable: true
+          properties:
+            pass:
+              type: boolean
+              nullable: true
+            score:
+              type: number
+              nullable: true
+            rubric:
+              type: object
+              nullable: true
+              additionalProperties:
+                type: number
+            total_score:
+              type: number
+              nullable: true
+            comment:
+              type: string
+              nullable: true
+    RoundOverview:
+      type: object
+      required:
+        - round
+        - mode
+        - summary
+      properties:
+        round:
+          $ref: '#/components/schemas/Round'
+        mode:
+          type: string
+          enum: [pass_fail, points, rubric]
+        summary:
+          type: object
+          properties:
+            total_submissions:
+              type: integer
+              nullable: true
+            total_matches:
+              type: integer
+              nullable: true
+            total_tracks:
+              type: integer
+              nullable: true
+            total_reviews:
+              type: integer
+              nullable: true
+            mode:
+              type: string
+        submissions:
+          type: array
+          nullable: true
+          items:
+            type: object
+            required:
+              - submission_id
+              - participant_id
+              - user_id
+              - display_name
+            properties:
+              submission_id:
+                type: string
+                format: uuid
+              participant_id:
+                type: string
+                format: uuid
+              user_id:
+                type: string
+                format: uuid
+              display_name:
+                type: string
+              status:
+                type: string
+              submitted_at:
+                type: string
+                format: date-time
+                nullable: true
+              lyrics:
+                type: string
+                nullable: true
+              pass_count:
+                type: integer
+              fail_count:
+                type: integer
+              judge_count:
+                type: integer
+              total_score:
+                type: number
+              avg_score:
+                type: number
+                nullable: true
+              total_reviews:
+                type: integer
+              audio:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+                  mime:
+                    type: string
+                  duration_sec:
+                    type: number
+                    nullable: true
+              avatar:
+                type: object
+                nullable: true
+                properties:
+                  key:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+        matches:
+          type: array
+          nullable: true
+          items:
+            type: object
+            required:
+              - id
+              - status
+              - participants
+            properties:
+              id:
+                type: string
+                format: uuid
+              status:
+                type: string
+              starts_at:
+                type: string
+                format: date-time
+                nullable: true
+              ends_at:
+                type: string
+                format: date-time
+                nullable: true
+              winner_match_track_id:
+                type: string
+                format: uuid
+                nullable: true
+              participants:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - participant_id
+                    - user_id
+                    - display_name
+                  properties:
+                    participant_id:
+                      type: string
+                      format: uuid
+                    user_id:
+                      type: string
+                      format: uuid
+                    display_name:
+                      type: string
+                    seed:
+                      type: integer
+                      nullable: true
+                    avg_total_score:
+                      type: number
+                      nullable: true
+                    track:
+                      type: object
+                      nullable: true
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        audio_key:
+                          type: string
+                          nullable: true
+                        audio_url:
+                          type: string
+                          format: uri
+                          nullable: true
+                        mime:
+                          type: string
+                          nullable: true
+                        duration_sec:
+                          type: number
+                          nullable: true
+                        submitted_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        lyrics:
+                          type: string
+                          nullable: true
+        rubric:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/JudgingRubricCriterion'
     EvaluationRequest:
       type: object
       properties:

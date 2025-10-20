@@ -10,15 +10,18 @@ import {
   listMatchTracks,
   getLeaderboard,
   getMatchTrackScores,
+  getRoundOverview,
+  listPublicBattles,
 } from '../services/tournaments.js';
 import { resolveCdnUrl } from '../services/media.js';
 import { AppError } from '../lib/errors.js';
 import { listPublicParticipants } from '../services/participants.js';
+import { TOURNAMENT_STATUSES } from '../lib/status.js';
 
 const publicRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/tournaments', async (request) => {
     const querySchema = z.object({
-      status: z.string().optional(),
+      status: z.enum(TOURNAMENT_STATUSES).optional(),
       page: z.coerce.number().optional(),
       limit: z.coerce.number().optional(),
     });
@@ -118,6 +121,26 @@ const publicRoutes: FastifyPluginAsync = async (fastify) => {
         avg_total: canRevealScores ? scoreMap.get(track.id) ?? null : null,
       })),
     };
+  });
+
+  fastify.get('/rounds/:id/overview', async (request) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const overview = await getRoundOverview(params.id);
+    if (!overview) {
+      throw new AppError({ status: 404, code: 'not_found', message: 'Round not found.' });
+    }
+    return overview;
+  });
+
+  fastify.get('/battles', async (request) => {
+    const query = z
+      .object({
+        status: z.enum(['current', 'finished']).optional(),
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+      })
+      .parse(request.query);
+    const battles = await listPublicBattles(query);
+    return { battles };
   });
 
   fastify.get('/leaderboards', async (request) => {

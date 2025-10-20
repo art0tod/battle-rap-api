@@ -5,9 +5,18 @@ import { finalizeMatch, refreshPublicViews } from '../services/judging.js';
 import { getProfileForViewer } from '../services/profile.js';
 import { listAuditLog } from '../services/audit.js';
 import { AppError } from '../lib/errors.js';
+import { MATCH_STATUSES } from '../lib/status.js';
+import {
+  createAdminBattle,
+  deleteAdminBattle,
+  getAdminBattle,
+  listAdminBattles,
+  updateAdminBattle,
+} from '../services/battlesAdmin.js';
 
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
   const requireAdmin = fastify.requireRole(['admin']);
+  const matchStatusEnum = z.enum(MATCH_STATUSES);
 
   fastify.post('/roles/:userId', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request, reply) => {
     const params = z.object({ userId: z.string().uuid() }).parse(request.params);
@@ -24,6 +33,78 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     await finalizeMatch(params.id);
     await refreshPublicViews();
+    reply.status(204).send();
+  });
+
+  fastify.get('/battles', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request) => {
+    const query = z
+      .object({
+        page: z.coerce.number().int().min(1).optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+        status: matchStatusEnum.optional(),
+        round_id: z.string().uuid().optional(),
+        tournament_id: z.string().uuid().optional(),
+      })
+      .parse(request.query);
+    return listAdminBattles(query);
+  });
+
+  fastify.post('/battles', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request, reply) => {
+    const body = z
+      .object({
+        round_id: z.string().uuid(),
+        starts_at: z.string().datetime().nullable().optional(),
+        ends_at: z.string().datetime().nullable().optional(),
+        status: matchStatusEnum.optional(),
+        participants: z
+          .array(
+            z.object({
+              participant_id: z.string().uuid(),
+              seed: z.number().int().min(0).max(64).nullable().optional(),
+            }),
+          )
+          .min(2),
+      })
+      .parse(request.body);
+
+    const battle = await createAdminBattle(body);
+    reply.status(201).send(battle);
+  });
+
+  fastify.get('/battles/:id', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const battle = await getAdminBattle(params.id);
+    if (!battle) {
+      throw new AppError({ status: 404, code: 'battle_not_found', message: 'Battle not found.' });
+    }
+    return battle;
+  });
+
+  fastify.patch('/battles/:id', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        round_id: z.string().uuid().optional(),
+        starts_at: z.string().datetime().nullable().optional(),
+        ends_at: z.string().datetime().nullable().optional(),
+        status: matchStatusEnum.optional(),
+        participants: z
+          .array(
+            z.object({
+              participant_id: z.string().uuid(),
+              seed: z.number().int().min(0).max(64).nullable().optional(),
+            }),
+          )
+          .min(2)
+          .optional(),
+      })
+      .parse(request.body);
+    return updateAdminBattle(params.id, body);
+  });
+
+  fastify.delete('/battles/:id', { preHandler: [fastify.requireAuth, requireAdmin] }, async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    await deleteAdminBattle(params.id);
     reply.status(204).send();
   });
 
@@ -76,3 +157,4 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 };
 
 export default adminRoutes;
+  const matchStatusEnum = z.enum(MATCH_STATUSES);

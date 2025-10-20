@@ -1,6 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { listJudgeAssignments, getMatchRound, upsertEvaluation } from '../services/judging.js';
+import {
+  assignNextBattleToJudge,
+  getJudgeBattleDetails,
+  getMatchRound,
+  listJudgeAssignments,
+  updateJudgeAssignmentStatus,
+  upsertEvaluation,
+} from '../services/judging.js';
 import { AppError } from '../lib/errors.js';
 
 const judgeRoutes: FastifyPluginAsync = async (fastify) => {
@@ -9,6 +16,39 @@ const judgeRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/assignments', { preHandler: [fastify.requireAuth, requireJudge] }, async (request) => {
     const judgeId = request.authUser!.id;
     return listJudgeAssignments(judgeId);
+  });
+
+  fastify.post('/assignments/random', { preHandler: [fastify.requireAuth, requireJudge] }, async (request, reply) => {
+    const judgeId = request.authUser!.id;
+    const assignment = await assignNextBattleToJudge(judgeId);
+    if (!assignment) {
+      reply.status(204).send();
+      return;
+    }
+    reply.send(assignment);
+  });
+
+  fastify.post('/assignments/:id/status', { preHandler: [fastify.requireAuth, requireJudge] }, async (request) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        status: z.enum(['completed', 'skipped']),
+      })
+      .parse(request.body);
+    return updateJudgeAssignmentStatus({
+      assignmentId: params.id,
+      judgeId: request.authUser!.id,
+      status: body.status,
+    });
+  });
+
+  fastify.get('/battles/:id', { preHandler: [fastify.requireAuth, requireJudge] }, async (request) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const details = await getJudgeBattleDetails(request.authUser!.id, params.id);
+    if (!details) {
+      throw new AppError({ status: 404, code: 'battle_not_found', message: 'Battle not found.' });
+    }
+    return details;
   });
 
   fastify.post('/battles/:id/scores', { preHandler: [fastify.requireAuth, requireJudge] }, async (request, reply) => {

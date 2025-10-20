@@ -72,6 +72,40 @@ describe('Public participants', () => {
   });
 });
 
+describe('Judge routes', () => {
+  it('requires auth for assignments listing', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/judge/assignments' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('requires auth for random assignment request', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/api/v1/judge/assignments/random' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('requires auth for assignment status updates', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/judge/assignments/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/status',
+      payload: { status: 'completed' },
+    });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('requires auth for battle details', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/judge/battles/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 describe('Moderator routes', () => {
   it('requires auth for submissions queue', async () => {
     const app = await buildTestApp();
